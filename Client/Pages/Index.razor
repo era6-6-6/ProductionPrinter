@@ -1,0 +1,141 @@
+﻿@page "/"
+@using System.Net.Http
+@using CurrieTechnologies.Razor.SweetAlert2
+@inject SweetAlertService swal;
+@inject HttpClient Http
+
+<h3>Výrobní oddělení</h3>
+
+<button class="department-button" @onclick='() => ShowPreview("Vstrikovna")'>Vstřikovna</button>
+<button class="department-button" @onclick='() => ShowPreview("Lakovna")'>Lakovna</button>
+<button class="department-button" @onclick='() => ShowPreview("Montaz")'>Montáž</button>
+
+@if (showModal)
+{
+    <div class="modal" style="display:block">
+        <div class="modal-content">
+            <span class="close" @onclick="CloseModal">&times;</span>
+       
+            <iframe id="pdfFrame" src="@pdfUrl" width="100%" height="600px"></iframe>
+            <button class="print-button" @onclick="() => PrintDocument(selectedDepartment)">Tisknout</button>
+        </div>
+    </div>
+}
+
+<style>
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgb(0,0,0);
+        background-color: rgba(0,0,0,0.4);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 1% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+    }
+
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+    }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+    .department-button,  .print-button {
+        background-color: #4CAF50; 
+        border: none;
+        color: white;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+</style>
+
+@code {
+    private bool showModal = false;
+    private string pdfUrl;
+    private string selectedDepartment;
+
+    private async Task ShowPreview(string department)
+    {
+        selectedDepartment = department;
+        var response = await Http.GetAsync($"api/print/preview/{department}");
+        if (response.IsSuccessStatusCode)
+        {
+            pdfUrl = await response.Content.ReadAsStringAsync();
+            showModal = true;
+        }
+        else
+        {
+            _ = HandleMessage($"{department} - náhled selhal", TypeOfMessage.Error);
+        }
+    }
+
+    private async Task PrintDocument(string department)
+    {
+        var response = await Http.PostAsync($"api/print/print/{department}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            _ = HandleMessage($"{department} - tisk zahájen" , TypeOfMessage.Success);
+            CloseModal();
+        }
+        else
+        {
+            _ = HandleMessage($"{department} - tisk selhal", TypeOfMessage.Error);
+        }
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+    public async Task HandleMessage(string message, TypeOfMessage typeOfMessage)
+    {
+        var res = swal.Mixin(new SweetAlertOptions
+            {
+                Text = message,
+                Icon = typeOfMessage switch
+                {
+                    TypeOfMessage.Error => SweetAlertIcon.Error,
+                    TypeOfMessage.Warning => SweetAlertIcon.Warning,
+                    TypeOfMessage.Success => SweetAlertIcon.Success,
+                    _ => SweetAlertIcon.Error
+                },
+                Position = SweetAlertPosition.TopEnd,
+                ShowConfirmButton = false,
+                TimerProgressBar = true,
+                Timer = 3000,
+                Toast = true
+            });
+        await res.FireAsync();
+    }
+    public enum TypeOfMessage
+    {
+        Error,
+        Warning,
+        Success
+    }
+}
